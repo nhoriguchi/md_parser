@@ -1,9 +1,11 @@
 use regex::Regex;
 use std::env;
 use std::fs;
+use std::path::Path;
+use chrono::NaiveDateTime;
+//use chrono::format::ParseError;
 
 #[allow(dead_code)]
-
 #[derive(Debug)]
 #[allow(unused_variables)]
 struct Section {
@@ -74,7 +76,19 @@ impl Section {
     }
 
     fn print_summary_line(&self) {
-        println!("  L{:<4}: {} {}", self.lineno, self.timestamps.last().unwrap(), self.title);
+        let binding = self.file.clone();
+        let path = Path::new(&binding);
+        let basename = path.file_name().unwrap().to_string_lossy();
+
+        let created_at = NaiveDateTime::parse_from_str(self.timestamps.first().unwrap(), "(%Y/%m/%d %H:%M)").unwrap();
+        println!(
+            "  {:.6}:L{:<4}: {} {}",
+            basename,
+            self.lineno,
+            created_at.format("%y%m%d_%H%M").to_string(),
+            // self.timestamps.last().unwrap(),
+            self.title
+        );
     }
 }
 
@@ -105,16 +119,29 @@ fn show_markdown_section_summary(sections: &Vec<Section>) {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: {} <markdown-file-path>", args[0]);
+    if args.len() == 1 {
+        eprintln!("Usage: {} <mdfile> [<mdfile> ...]", args[0]);
         std::process::exit(1);
     }
 
-    let file_path = &args[1];
+    let mut args: Vec<String> = env::args().collect();
+    args.remove(0);
 
-    let sections = parse_markdown_file(file_path);
+    let mut global_sections = Vec::new();
 
-    show_markdown_section_summary(&sections);
+    for arg in args.iter() {
+        let sections = parse_markdown_file(&arg);
+        global_sections.extend(sections);
+    }
+
+    global_sections.sort_by(|a, b| {
+        b.timestamps
+            .last()
+            .unwrap()
+            .cmp(&a.timestamps.last().unwrap())
+    });
+
+    show_markdown_section_summary(&global_sections);
 }
 
 fn parse_markdown_file(file_path: &str) -> Vec<Section> {
@@ -148,7 +175,12 @@ fn parse_markdown_file(file_path: &str) -> Vec<Section> {
         section.parse_status();
     }
 
-    sections.sort_by(|a, b| b.timestamps.last().unwrap().cmp(&a.timestamps.last().unwrap()));
+    sections.sort_by(|a, b| {
+        b.timestamps
+            .last()
+            .unwrap()
+            .cmp(&a.timestamps.last().unwrap())
+    });
 
     sections
 }
