@@ -128,6 +128,8 @@ fn show_markdown_section_summary(sections: &Vec<Section>) {
         if val != "true" {
             return;
         }
+    } else {
+        return;
     }
 
     println!("");
