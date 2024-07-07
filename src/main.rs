@@ -1,8 +1,8 @@
+use chrono::NaiveDateTime;
 use regex::Regex;
 use std::env;
 use std::fs;
 use std::path::Path;
-use chrono::NaiveDateTime;
 //use chrono::format::ParseError;
 
 #[allow(dead_code)]
@@ -18,6 +18,7 @@ struct Section {
     wip: bool,
     wait: bool,
     done: bool,
+    dont: bool,
     timestamps: Vec<String>,
 }
 
@@ -33,6 +34,7 @@ impl Section {
             wip: false,
             wait: false,
             done: false,
+            dont: false,
             timestamps: Vec::new(),
         }
     }
@@ -72,6 +74,9 @@ impl Section {
         if self.contains_keyword("*DONE*") {
             self.done = true;
         }
+        if self.contains_keyword("*DONT*") {
+            self.dont = true;
+        }
         self.parse_timestamps();
     }
 
@@ -80,7 +85,9 @@ impl Section {
         let path = Path::new(&binding);
         let basename = path.file_name().unwrap().to_string_lossy();
 
-        let created_at = NaiveDateTime::parse_from_str(self.timestamps.first().unwrap(), "(%Y/%m/%d %H:%M)").unwrap();
+        let created_at =
+            NaiveDateTime::parse_from_str(self.timestamps.first().unwrap(), "(%Y/%m/%d %H:%M)")
+                .unwrap();
         println!(
             "  {:.6}:L{:<4}: {} {}",
             basename,
@@ -99,19 +106,42 @@ fn show_markdown_section_summary(sections: &Vec<Section>) {
             section.print_summary_line();
         }
     }
-    println!("");
 
+    println!("");
     println!("WIP items:");
     for section in sections {
         if section.wip {
             section.print_summary_line();
         }
     }
-    println!("");
 
+    println!("");
     println!("TODO items:");
     for section in sections {
         if section.todo {
+            section.print_summary_line();
+        }
+    }
+
+    let key = "SHOW_CLOSED";
+    if let Ok(val) = env::var(key) {
+        if val != "true" {
+            return;
+        }
+    }
+
+    println!("");
+    println!("DONT items:");
+    for section in sections {
+        if section.dont {
+            section.print_summary_line();
+        }
+    }
+
+    println!("");
+    println!("DONE items:");
+    for section in sections {
+        if section.done {
             section.print_summary_line();
         }
     }
