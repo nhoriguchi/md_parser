@@ -14,6 +14,7 @@ struct Section {
     content: String,
     todo: bool,
     wip: bool,
+    wait: bool,
     done: bool,
     timestamps: Vec<String>,
 }
@@ -28,6 +29,7 @@ impl Section {
             content: String::new(),
             todo: false,
             wip: false,
+            wait: false,
             done: false,
             timestamps: Vec::new(),
         }
@@ -50,6 +52,9 @@ impl Section {
             self.timestamps.push(mat.as_str().to_string());
         }
         self.timestamps.sort();
+        if self.timestamps.is_empty() {
+            self.timestamps.push("(2000/01/01 00:00)".to_string());
+        }
     }
 
     fn parse_status(&mut self) {
@@ -59,6 +64,9 @@ impl Section {
         if self.contains_keyword("*WIP*") {
             self.wip = true;
         }
+        if self.contains_keyword("*WAIT*") {
+            self.wait = true;
+        }
         if self.contains_keyword("*DONE*") {
             self.done = true;
         }
@@ -66,12 +74,36 @@ impl Section {
     }
 
     fn print_summary_line(&self) {
-        println!("  L{}: {}", self.lineno, self.title);
+        println!("  L{:<4}: {} {}", self.lineno, self.timestamps.last().unwrap(), self.title);
+    }
+}
+
+fn show_markdown_section_summary(sections: &Vec<Section>) {
+    println!("WAIT items:");
+    for section in sections {
+        if section.wait {
+            section.print_summary_line();
+        }
+    }
+    println!("");
+
+    println!("WIP items:");
+    for section in sections {
+        if section.wip {
+            section.print_summary_line();
+        }
+    }
+    println!("");
+
+    println!("TODO items:");
+    for section in sections {
+        if section.todo {
+            section.print_summary_line();
+        }
     }
 }
 
 fn main() {
-    // コマンドライン引数を取得
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: {} <markdown-file-path>", args[0]);
@@ -80,29 +112,12 @@ fn main() {
 
     let file_path = &args[1];
 
-    let mut sections_with_keyword = find_sections_with_keyword(file_path);
+    let sections = parse_markdown_file(file_path);
 
-    for section in &mut sections_with_keyword {
-        section.parse_status();
-    }
-
-    println!("WIP items:");
-    for section in &mut sections_with_keyword {
-        if section.wip {
-            section.print_summary_line();
-        }
-    }
-    println!("");
-
-    println!("TODO items:");
-    for section in &mut sections_with_keyword {
-        if section.todo {
-            section.print_summary_line();
-        }
-    }
+    show_markdown_section_summary(&sections);
 }
 
-fn find_sections_with_keyword( file_path: &str) -> Vec<Section> {
+fn parse_markdown_file(file_path: &str) -> Vec<Section> {
     let mut sections: Vec<Section> = Vec::new();
     let mut current_section: Option<Section> = None;
 
@@ -128,6 +143,12 @@ fn find_sections_with_keyword( file_path: &str) -> Vec<Section> {
     if let Some(section) = current_section {
         sections.push(section);
     }
+
+    for section in &mut sections {
+        section.parse_status();
+    }
+
+    sections.sort_by(|a, b| b.timestamps.last().unwrap().cmp(&a.timestamps.last().unwrap()));
 
     sections
 }
