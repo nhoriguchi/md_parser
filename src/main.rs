@@ -124,11 +124,13 @@ fn show_markdown_section_summary(sections: &Vec<Section>) {
     }
 
     let key = "SHOW_CLOSED";
+    let mut show_closed = false;
     if let Ok(val) = env::var(key) {
-        if val != "true" {
-            return;
+        if val == "true" {
+            show_closed = true;
         }
-    } else {
+    }
+    if show_closed == false {
         return;
     }
 
