@@ -94,8 +94,46 @@ impl Section {
             self.lineno,
             created_at.format("%y%m%d_%H%M").to_string(),
             // self.timestamps.last().unwrap(),
-            self.title
+            self.short_title()
         );
+    }
+
+    fn short_title(&self) -> String {
+        let mut result = self.title.clone();
+        let pattern = r"\(\d{4}/\d{2}/\d{2} \d{2}:\d{2}\) ?";
+        let re = Regex::new(pattern).unwrap();
+        result = re.replace_all(&result, "").to_string();
+        let pattern = r"\*(TODO|WIP|WAIT|DONE|DONT)\* ?";
+        let re = Regex::new(pattern).unwrap();
+        result = re.replace_all(&result, "").to_string();
+        result.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_short_title() {
+        let my_section = Section::new("".to_string(), 10, "test title".to_string(), 2);
+        assert_eq!(my_section.short_title(), "test title");
+        let mut my_section = Section::new(
+            "".to_string(),
+            10,
+            "(2024/07/13 04:38) test title".to_string(),
+            2,
+        );
+        assert_eq!(my_section.short_title(), "test title");
+        my_section = Section::new(
+            "".to_string(),
+            10,
+            "(2024/07/13 04:38) *TODO* test title".to_string(),
+            2,
+        );
+        assert_eq!(my_section.short_title(), "test title");
+        my_section = Section::new("".to_string(), 10, "*TODO* test title".to_string(), 2);
+        assert_eq!(my_section.short_title(), "test title");
     }
 }
 
