@@ -1,17 +1,21 @@
+// TODO: タグや優先度への対応、ID
+
 use chrono::NaiveDateTime;
 use regex::Regex;
 use std::env;
 use std::fs;
 use std::path::Path;
-//use chrono::format::ParseError;
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(unused_variables)]
+#[derive(PartialEq)]
 struct Section {
+    id: usize,
     file: String,
     lineno: usize,
     title: String,
+    full_title: String,
     level: usize,
     content: String,
     todo: bool,
@@ -23,11 +27,20 @@ struct Section {
 }
 
 impl Section {
-    fn new(file: String, lineno: usize, title: String, level: usize) -> Self {
+    fn new(
+        id: usize,
+        file: String,
+        lineno: usize,
+        title: String,
+        full_title: String,
+        level: usize,
+    ) -> Self {
         Self {
+            id,
             file,
             lineno,
             title,
+            full_title,
             level,
             content: String::new(),
             todo: false,
@@ -93,13 +106,12 @@ impl Section {
             basename,
             self.lineno,
             created_at.format("%y%m%d_%H%M").to_string(),
-            // self.timestamps.last().unwrap(),
             self.short_title()
         );
     }
 
     fn short_title(&self) -> String {
-        let mut result = self.title.clone();
+        let mut result = self.full_title.clone();
         let pattern = r"\(\d{4}/\d{2}/\d{2} \d{2}:\d{2}\) ?";
         let re = Regex::new(pattern).unwrap();
         result = re.replace_all(&result, "").to_string();
@@ -189,6 +201,8 @@ fn show_markdown_section_summary(sections: &Vec<Section>) {
     }
 }
 
+use std::collections::HashMap;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() == 1 {
@@ -216,37 +230,82 @@ fn main() {
     show_markdown_section_summary(&global_sections);
 }
 
-fn parse_markdown_file(file_path: &str) -> Vec<Section> {
+fn parse_markdown_file<'a>(file_path: &str) -> Vec<Section> {
     let mut sections: Vec<Section> = Vec::new();
     let mut current_section: Option<Section> = None;
+
+    let mut section_map = HashMap::<usize, Section>::new();
 
     let markdown = fs::read_to_string(file_path).expect("Could not read file");
 
     let heading_re = Regex::new(r"^(#{1,6})\s+(.*)").unwrap();
+    let mut section_stack: Vec<usize> = Vec::new();
+    let mut id = 1;
+    let mut prevlevel = 0;
     for (index, line) in markdown.lines().enumerate() {
         if let Some(caps) = heading_re.captures(line) {
             let level = caps[1].len();
             let title = caps[2].trim().to_string();
+            let mut full_title = String::new();
 
-            if let Some(section) = current_section.take() {
-                sections.push(section);
+            // Finalize previous section.
+            if current_section != None {
+                let section = current_section.unwrap();
+                sections.push(section.clone());
+
+                // println!("XXX3 id:{} level {}/{} {:?}", id, prevlevel, level, section_stack);
+                if prevlevel >= level {
+                    // println!("XXX4 truncated {:?} to {} items", section_stack, level - 1);
+                    if level > 1 {
+                        section_stack.truncate(level - 1);
+                    } else {
+                        section_stack = Vec::new();
+                    }
+                    // println!("XXX4B truncated stack {:?}", section_stack);
+                } else {
+                    section_stack.push(id);
+                }
+                section_map.insert(id, section);
+                // println!("XXX5 {:?}", section_stack);
+
+                let mut ve: Vec<_> = section_stack
+                    .iter()
+                    .map(|x| section_map.get(x).unwrap().title.clone())
+                    .collect();
+                ve.push(title.clone());
+                full_title = ve.join(" / ");
+                // println!("XXX7 level {}/{}, {}", prevlevel, level, full_title)
             }
 
-            current_section = Some(Section::new(file_path.to_string(), index + 1, title, level));
+            if id == 1 {
+                full_title = title.clone();
+            }
+
+            current_section = Some(Section::new(
+                id,
+                file_path.to_string(),
+                index + 1,
+                title,
+                full_title,
+                level,
+            ));
+
+            id += 1;
+            prevlevel = level;
         }
+
         if let Some(ref mut section) = current_section {
             section.add_content(line);
         }
     }
 
-    if let Some(section) = current_section {
-        sections.push(section);
-    }
+    // Finalize the last section.
+    let section = current_section.unwrap();
+    sections.push(section.clone());
 
     for section in &mut sections {
         section.parse_status();
     }
-
     sections.sort_by(|a, b| {
         b.timestamps
             .last()
